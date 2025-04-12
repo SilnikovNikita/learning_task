@@ -15,7 +15,7 @@ func NewFilePresenter(path string) *FilePresenter {
 	return &FilePresenter{path: path}
 }
 func (p *FilePresenter) Present(data []string) error {
-	file, err := os.OpenFile(p.path, os.O_CREATE|os.O_APPEND, os.ModePerm)
+	file, err := os.OpenFile(p.path, os.O_CREATE|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
