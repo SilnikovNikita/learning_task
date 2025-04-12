@@ -1,0 +1,30 @@
+# IDE и редакторы
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Файлы данных проекта
+entry.txt
+file.txt
+
+# Go специфичные
+bin/
+dist/
+*.exe
+*.out
+go.sum
+vendor/
+
+# Тестовые данные
+*.test
+*.prof
+coverage.out
+
+# Локальные конфиги
+.env
+*.local
