@@ -9,7 +9,8 @@ func NewService(prod Producer, pres Presenter) *Service {
 	return &Service{prod, pres}
 }
 
-func (s *Service) masking(arr []byte) {
+func (s *Service) masking(data string) string {
+	arr := []byte(data)
 	templateUrl := []byte("https://")
 	lenTemplateUrl := len(templateUrl)
 	for i := 0; i < len(arr)-1; i++ {
@@ -27,6 +28,7 @@ func (s *Service) masking(arr []byte) {
 			}
 		}
 	}
+	return string(arr)
 }
 
 func (s *Service) Run() error {
@@ -35,10 +37,8 @@ func (s *Service) Run() error {
 		return err
 	}
 
-	for i, _ := range data {
-		bytes := []byte(data[i])
-		s.masking(bytes)
-		data[i] = string(bytes)
+	for i := range data {
+		data[i] = s.masking(data[i])
 	}
 
 	err = s.pres.Present(data)

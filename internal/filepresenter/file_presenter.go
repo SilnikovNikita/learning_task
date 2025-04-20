@@ -1,6 +1,7 @@
 package filepresenter
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -19,7 +20,12 @@ func (p *FilePresenter) Present(data []string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			fmt.Printf("Error closing file: %s\n", err)
+		}
+	}()
 	for _, d := range data {
 		_, err = file.WriteString(d + "\n")
 		if err != nil {

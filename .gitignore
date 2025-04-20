@@ -21,7 +21,7 @@ go.sum
 vendor/
 
 # Тестовые данные
-*.test
+#*.test
 *.prof
 coverage.out
 
