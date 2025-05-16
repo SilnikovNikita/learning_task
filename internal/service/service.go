@@ -1,5 +1,9 @@
 package service
 
+import (
+	"sync"
+)
+
 type Service struct {
 	prod Producer
 	pres Presenter
@@ -32,19 +36,65 @@ func (s *Service) masking(data string) string {
 }
 
 func (s *Service) Run() error {
+	wg := sync.WaitGroup{}
+	sizeBuffer := 10
+	semaphore := NewSemaphore(sizeBuffer)
+	resultCh := make(chan string, sizeBuffer)
+
 	data, err := s.prod.Produce()
 	if err != nil {
 		return err
 	}
 
-	for i := range data {
-		data[i] = s.masking(data[i])
+	dataChan := dataToChan(data, sizeBuffer)
+
+	wg.Add(sizeBuffer)
+	for i := 0; i < sizeBuffer; i++ {
+		go func() {
+			semaphore.Acquire()
+			defer wg.Done()
+			defer semaphore.Release()
+
+			for dataFromChan := range dataChan {
+				resultCh <- s.masking(dataFromChan)
+			}
+		}()
 	}
 
-	err = s.pres.Present(data)
+	var resultSlice []string
+	collectDone := make(chan struct{})
+
+	go func() {
+		for result := range resultCh {
+			resultSlice = append(resultSlice, result)
+		}
+		close(collectDone)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	<-collectDone
+		
+	err = s.pres.Present(resultSlice)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func dataToChan(data []string, sizeCh int) chan string {
+	resultCh := make(chan string, sizeCh)
+
+	go func() {
+		defer close(resultCh)
+		for _, v := range data {
+			resultCh <- v
+		}
+	}()
+
+	return resultCh
 }
