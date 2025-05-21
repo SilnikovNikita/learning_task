@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"log/slog"
 	"sync"
 )
 
@@ -35,66 +37,69 @@ func (s *Service) masking(data string) string {
 	return string(arr)
 }
 
-func (s *Service) Run() error {
+func (s *Service) Run(ctx context.Context, logger *slog.Logger) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	wg := sync.WaitGroup{}
 	sizeBuffer := 10
-	semaphore := NewSemaphore(sizeBuffer)
-	resultCh := make(chan string, sizeBuffer)
+	semChan := make(chan struct{}, sizeBuffer)
 
 	data, err := s.prod.Produce()
 	if err != nil {
 		return err
 	}
 
-	dataChan := dataToChan(data, sizeBuffer)
+	dataChan := make(chan string, len(data))
+	resultChan := make(chan string, len(data))
+
+	for i := range data {
+		dataChan <- data[i]
+	}
+	close(dataChan)
 
 	wg.Add(sizeBuffer)
 	for i := 0; i < sizeBuffer; i++ {
-		go func() {
-			semaphore.Acquire()
-			defer wg.Done()
-			defer semaphore.Release()
+		go func(i int) {
+			logger.Debug("Goroutine is starting", "goroutine ID", i)
+			semChan <- struct{}{}
+			defer func() {
+				<-semChan
+				logger.Debug("Goroutine is ended", "goroutine ID", i)
+				wg.Done()
+			}()
 
-			for dataFromChan := range dataChan {
-				resultCh <- s.masking(dataFromChan)
+			for val := range dataChan {
+				select {
+				case <-ctx.Done():
+					logger.Error("Context was canceled", "Error ctx:", ctx.Err(), "goroutine ID", i)
+					return
+				default:
+					resultChan <- s.masking(val)
+					//time.Sleep(1500 * time.Millisecond)
+				}
 			}
-		}()
+		}(i)
 	}
-
-	var resultSlice []string
-	collectDone := make(chan struct{})
-
-	go func() {
-		for result := range resultCh {
-			resultSlice = append(resultSlice, result)
-		}
-		close(collectDone)
-	}()
 
 	go func() {
 		wg.Wait()
-		close(resultCh)
+		close(resultChan)
+		close(semChan)
 	}()
 
-	<-collectDone
-		
+	var resultSlice []string
+	for result := range resultChan {
+		resultSlice = append(resultSlice, result)
+	}
+
 	err = s.pres.Present(resultSlice)
 	if err != nil {
 		return err
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	return nil
-}
-
-func dataToChan(data []string, sizeCh int) chan string {
-	resultCh := make(chan string, sizeCh)
-
-	go func() {
-		defer close(resultCh)
-		for _, v := range data {
-			resultCh <- v
-		}
-	}()
-
-	return resultCh
 }
